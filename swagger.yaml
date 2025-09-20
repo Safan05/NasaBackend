@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: Nasa Backend API
+  version: 1.0.0
+  description: |
+    OpenAPI specification for the existing routes in the Nasa backend.
+    
+    Notes:
+    - Authentication uses an HttpOnly cookie named `auth_token`.
+    - Use the `/api/v1/auth/login` endpoint to receive the cookie (and a token echo in the payload).
+servers:
+  - url: http://localhost:5000
+    description: Local development
+  - url: https://api.example.com
+    description: Production (example)
+tags:
+  - name: Auth
+    description: Authentication routes
+  - name: Guest
+    description: Guest utilities
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: auth_token
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, name, age]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: StrongP@ssw0rd
+        name:
+          type: string
+          example: John Doe
+        age:
+          type: integer
+          example: 30
+    GuestRegisterResponse:
+      type: object
+      properties:
+        guestId:
+          type: string
+          example: guest_ab12cd34ef
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: User registered. Verification code sent to email.
+        uuid:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: StrongP@ssw0rd
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Login successful
+        token:
+          type: string
+          description: JWT also set in HttpOnly cookie `auth_token`.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    VerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        code:
+          type: string
+          description: 6-digit verification code
+          example: "123456"
+    ResendCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+    MeResponse:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        role:
+          type: string
+          description: Current user role after verification
+          example: customer
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Internal server error
+        error:
+          type: string
+          example: Unauthorized
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered and verification email attempted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive auth cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful; cookie is set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: auth_token=eyJhbGciOi...; Path=/; HttpOnly; SameSite=Strict
+              description: HttpOnly JWT cookie for subsequent authenticated requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/verify:
+    post:
+      tags: [Auth]
+      summary: Verify email using a 6-digit code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Email verified; role updated to customer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email verified. Role updated to customer
+        '400':
+          description: Invalid or expired code; or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/resend-code:
+    post:
+      tags: [Auth]
+      summary: Resend a verification code to email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendCodeRequest'
+      responses:
+        '200':
+          description: Verification code resent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Verification code resent
+        '400':
+          description: Email missing or user already verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user from cookie
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: Unauthorized (no cookie)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/guest/register:
+    get:
+      tags: [Guest]
+      summary: Generate a temporary guest identifier
+      responses:
+        '200':
+          description: Guest identifier generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestRegisterResponse'
